@@ -1,0 +1,135 @@
+# vLLM Router Release Pipeline
+# This pipeline is triggered on version tags (v*) to build and publish releases
+
+env:
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+steps:
+  # ============================================================================
+  # Build Release Artifacts
+  # ============================================================================
+  - label: ":package: Build Release Artifacts"
+    command: |
+      # Build Rust binary for release
+      cargo build --release
+
+      # Build Python wheels for multiple platforms
+      pip install -U pip setuptools wheel setuptools-rust cibuildwheel
+
+      # Build wheels for Linux
+      python -m build
+
+      # If cibuildwheel is needed for multiple Python versions:
+      # cibuildwheel --platform linux
+    artifact_paths:
+      - "target/release/vllm-router"
+      - "dist/*.whl"
+      - "dist/*.tar.gz"
+    agents:
+      queue: "cpu_queue_premerge"
+
+  - wait
+
+  # ============================================================================
+  # Run Release Tests
+  # ============================================================================
+  - label: ":test_tube: Smoke Test Release Binary"
+    command: |
+      buildkite-agent artifact download "target/release/vllm-router" .
+      chmod +x target/release/vllm-router
+      ./target/release/vllm-router --version
+      ./target/release/vllm-router --help
+    agents:
+      queue: "cpu_queue_premerge"
+
+  - label: ":python: Test Python Wheel"
+    command: |
+      buildkite-agent artifact download "dist/*.whl" .
+      pip install dist/*.whl
+      python -c "import vllm_router; print(vllm_router.__version__)"
+    agents:
+      queue: "cpu_queue_premerge"
+
+  - wait
+
+  # ============================================================================
+  # Publish to PyPI
+  # ============================================================================
+  - block: ":pypi: Publish to PyPI?"
+    prompt: "Ready to publish to PyPI? This action cannot be undone."
+
+  - label: ":pypi: Publish to PyPI"
+    command: |
+      buildkite-agent artifact download "dist/*" .
+      pip install twine
+
+      # Upload to PyPI (requires PYPI_TOKEN environment variable)
+      twine upload dist/*.whl dist/*.tar.gz --username __token__ --password "$PYPI_TOKEN"
+    if: build.tag =~ /^v.*/
+    agents:
+      queue: "cpu_queue_premerge"
+
+  # ============================================================================
+  # Build and Publish Docker Images
+  # ============================================================================
+  - label: ":docker: Build Release Docker Images"
+    command: |
+      # Extract version from tag (e.g., v1.2.3 -> 1.2.3)
+      VERSION="${BUILDKITE_TAG#v}"
+
+      # Build Docker image
+      docker build -f Dockerfile.router \
+        -t vllm-router:${VERSION} \
+        -t vllm-router:latest \
+        --build-arg VERSION=${VERSION} \
+        .
+
+      # Save image info
+      docker images vllm-router
+    artifact_paths:
+      - "docker-images.txt"
+    agents:
+      queue: "cpu_queue_premerge"
+
+  - block: ":docker: Push Docker Images?"
+    prompt: "Ready to push Docker images? Requires Docker Hub credentials."
+
+  - label: ":docker: Publish Docker Images"
+    command: |
+      VERSION="${BUILDKITE_TAG#v}"
+
+      # Login to Docker Hub (requires DOCKER_USERNAME and DOCKER_PASSWORD)
+      echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      # Push versioned image
+      docker push vllm-router:${VERSION}
+
+      # Push latest tag
+      docker push vllm-router:latest
+
+      # Logout
+      docker logout
+    if: build.tag =~ /^v.*/
+    agents:
+      queue: "cpu_queue_premerge"
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  - label: ":github: Create GitHub Release"
+    command: |
+      # Download all artifacts
+      buildkite-agent artifact download "target/release/vllm-router" .
+      buildkite-agent artifact download "dist/*" .
+
+      # Create GitHub release (requires gh CLI and GITHUB_TOKEN)
+      gh release create ${BUILDKITE_TAG} \
+        --title "Release ${BUILDKITE_TAG}" \
+        --notes "Release ${BUILDKITE_TAG} of vLLM Router" \
+        target/release/vllm-router \
+        dist/*.whl \
+        dist/*.tar.gz
+    if: build.tag =~ /^v.*/
+    agents:
+      queue: "cpu_queue_premerge"
