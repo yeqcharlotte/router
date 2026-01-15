@@ -140,7 +140,15 @@ impl Router {
             RoutingMode::Regular {
                 worker_urls: vec![],
             }
-        } else if self.pd_disaggregation || self.vllm_pd_disaggregation {
+        } else if self.vllm_pd_disaggregation {
+            RoutingMode::VllmPrefillDecode {
+                prefill_urls: self.prefill_urls.clone().unwrap_or_default(),
+                decode_urls: self.decode_urls.clone().unwrap_or_default(),
+                prefill_policy: self.prefill_policy.as_ref().map(convert_policy),
+                decode_policy: self.decode_policy.as_ref().map(convert_policy),
+                discovery_address: None,
+            }
+        } else if self.pd_disaggregation {
             RoutingMode::PrefillDecode {
                 prefill_urls: self.prefill_urls.clone().unwrap_or_default(),
                 decode_urls: self.decode_urls.clone().unwrap_or_default(),
