@@ -19,7 +19,7 @@ struct Core {
 
 impl RequestHandler {
     pub fn new(config: &std::path::PathBuf) -> Result<Self, ConfigurationError> {
-        let builder = RoutingTreeBuilder::from_file(config);
+        let builder = RoutingTreeBuilder::from_file(config)?;
         let root = builder.build_routing_tree()?;
 
         Ok(Self {

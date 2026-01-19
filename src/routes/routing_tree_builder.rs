@@ -13,10 +13,14 @@ impl RoutingTreeBuilder {
         Self { config }
     }
 
-    pub fn from_file(config: &std::path::PathBuf) -> Self {
-        let json = std::fs::read_to_string(config).unwrap();
-
-        RoutingTreeBuilder::new(json)
+    pub fn from_file(config: &std::path::PathBuf) -> Result<Self, ConfigurationError> {
+        let json = std::fs::read_to_string(config)
+            .map_err(|e| ConfigurationError(format!(
+                "Failed to read config file '{}': {}",
+                config.display(),
+                e
+            )))?;
+        Ok(RoutingTreeBuilder::new(json))
     }
 
     pub fn build_routing_tree(
