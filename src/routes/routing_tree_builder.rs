@@ -22,7 +22,11 @@ impl RoutingTreeBuilder {
     pub fn build_routing_tree(
         self,
     ) -> Result<Box<dyn RouteHandle + Send + Sync>, ConfigurationError> {
-        let json: Value = serde_json::from_str(&self.config).unwrap();
+        let json: Value = serde_json::from_str(&self.config)
+            .map_err(|e| ConfigurationError(format!(
+                "Invalid JSON config: {}",
+                e
+            )))?;
         let route: &Map<String, Value> = json.require("route")?;
 
         let root: Box<dyn RouteHandle + Send + Sync> = match route.require::<&str>("type")? {
