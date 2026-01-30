@@ -143,6 +143,13 @@ impl VllmPDRouter {
         if request.get("max_completion_tokens").is_some() {
             request["max_completion_tokens"] = json!(1);
         }
+        // Also adjust min_tokens to ensure min_tokens <= max_tokens
+        // This is required because vLLM validates that min_tokens <= max_tokens
+        if let Some(min_tokens) = request.get("min_tokens").and_then(|v| v.as_u64()) {
+            if min_tokens > 1 {
+                request["min_tokens"] = json!(1);
+            }
+        }
         // Force non-streaming for prefill to get JSON response with kv_transfer_params
         request["stream"] = json!(false);
         // Remove stream_options since we're setting stream=false
