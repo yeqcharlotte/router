@@ -70,7 +70,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Cache-aware routing policy
 ///
@@ -120,31 +120,6 @@ impl CacheAwarePolicy {
             config,
             trees,
             eviction_handle,
-        }
-    }
-
-    /// Initialize the tree with worker URLs (used only during initial setup)
-    pub fn init_workers(&self, workers: &[Arc<dyn Worker>]) {
-        // Group workers by model
-        let mut model_workers: HashMap<String, Vec<&Arc<dyn Worker>>> = HashMap::new();
-        for worker in workers {
-            let tree_key = normalize_model_key(worker.model_id());
-            model_workers
-                .entry(tree_key.to_string())
-                .or_default()
-                .push(worker);
-        }
-
-        // Initialize tree for each model
-        for (tree_key, model_workers) in model_workers {
-            let tree = self
-                .trees
-                .entry(tree_key)
-                .or_insert_with(|| Arc::new(Tree::new()))
-                .clone();
-            for worker in model_workers {
-                tree.insert("", worker.url());
-            }
         }
     }
 
@@ -278,6 +253,11 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
         let is_imbalanced = max_load.saturating_sub(min_load) > self.config.balance_abs_threshold
             && (max_load as f32) > (min_load as f32 * self.config.balance_rel_threshold);
 
+        debug!(
+            "Load status for model: max_load={}, min_load={}, is_imbalanced={}",
+            max_load, min_load, is_imbalanced
+        );
+
         if is_imbalanced {
             return self.select_worker_min_load(
                 workers,
@@ -296,6 +276,9 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
         // DashMap only locks the specific shard containing this key
         let tree = self.trees.get(model_id).map(|entry| entry.value().clone());
 
+        let keys: Vec<_> = self.trees.iter().map(|entry| entry.key().clone()).collect();
+        debug!("Available tree keys: {:?}", keys);
+
         let Some(tree) = tree else {
             // No tree for this model, log warning and use random selection
             debug!(
@@ -313,7 +296,7 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
 
             return Some(selected_idx);
         };
-
+        debug!("Using cache-aware routing for model '{}'", model_id);
         // Now we work with the tree without holding the HashMap lock
         // Use prefix_match_with_counts to avoid redundant chars().count() calls
         let result = tree.prefix_match_with_counts(text);
@@ -323,6 +306,10 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
             result.matched_char_count as f32 / result.input_char_count as f32
         };
 
+        debug!(
+            "Cache match for model '{}': matched_chars={}, input_chars={}, match_rate={:.2}",
+            model_id, result.matched_char_count, result.input_char_count, match_rate
+        );
         // Select worker without String allocation
         let selected_idx = if match_rate > self.config.cache_threshold {
             // Cache hit path: find worker by URL (compare &str directly, no allocation)
@@ -425,6 +412,47 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
             .copied()?;
 
         Some((prefill_idx, decode_idx))
+    }
+
+    fn requires_initialization(&self) -> bool {
+        true // Cache-aware policy requires init_workers() to set up trees
+    }
+
+    fn init_workers(&self, workers: &[Arc<dyn Worker>]) {
+        // Group workers by model
+        info!(
+            "Initializing workers for cache-aware policy: {}",
+            workers
+                .iter()
+                .map(|w| w.url())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let mut model_workers: HashMap<String, Vec<&Arc<dyn Worker>>> = HashMap::new();
+        for worker in workers {
+            let tree_key = normalize_model_key(worker.model_id());
+            model_workers
+                .entry(tree_key.to_string())
+                .or_default()
+                .push(worker);
+        }
+
+        // Initialize tree for each model
+        for (tree_key, model_workers) in model_workers {
+            info!(
+                "Creating tree for model key: '{}' with {} workers",
+                tree_key,
+                model_workers.len()
+            );
+            let tree = self
+                .trees
+                .entry(tree_key)
+                .or_insert_with(|| Arc::new(Tree::new()))
+                .clone();
+            for worker in model_workers {
+                tree.insert("", worker.url());
+            }
+        }
     }
 }
 
