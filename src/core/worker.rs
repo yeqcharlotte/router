@@ -1688,6 +1688,38 @@ mod tests {
     }
 
     #[test]
+    fn test_dp_aware_endpoint_url_ipv6() {
+        let dp_worker = DPAwareWorker::new(
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009".to_string(),
+            2,
+            4,
+            WorkerType::Regular,
+        );
+
+        // url() includes the @rank suffix (used for worker identification/registry)
+        assert_eq!(
+            dp_worker.url(),
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@2"
+        );
+
+        // base_url() strips the @rank suffix (used for actual HTTP requests)
+        assert_eq!(
+            dp_worker.base_url(),
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+        );
+
+        // endpoint_url() uses base_url, not url(), to construct request URLs
+        assert_eq!(
+            dp_worker.endpoint_url("/inference/v1/generate"),
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009/inference/v1/generate"
+        );
+
+        assert_eq!(dp_worker.dp_rank(), Some(2));
+        assert_eq!(dp_worker.dp_size(), Some(4));
+        assert!(dp_worker.is_dp_aware());
+    }
+
+    #[test]
     fn test_dp_aware_worker_delegated_methods() {
         let dp_worker =
             DPAwareWorker::new("http://worker1:8080".to_string(), 0, 2, WorkerType::Regular);

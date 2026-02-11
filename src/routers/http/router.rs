@@ -1602,7 +1602,7 @@ impl RouterTrait for Router {
         };
 
         let worker: &dyn Worker = workers[worker_idx].as_ref();
-        let url = format!("{}{}", worker.url(), path);
+        let url = worker.endpoint_url(path);
 
         debug!("Transparent proxy: forwarding to {}", url);
 
@@ -1622,6 +1622,9 @@ impl RouterTrait for Router {
                     .into_response();
             }
         };
+
+        // Add X-data-parallel-rank header for DP-aware routing
+        request_builder = dp_utils::add_dp_rank_header(request_builder, worker.dp_rank());
 
         // Propagate headers
         request_builder = header_utils::propagate_trace_headers(request_builder, headers);

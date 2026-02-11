@@ -175,4 +175,87 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid worker_url format"));
     }
+
+    #[test]
+    fn test_extract_dp_rank_ipv6() {
+        let result =
+            extract_dp_rank("https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@2");
+        assert!(result.is_ok());
+        let (base, rank) = result.unwrap();
+        assert_eq!(
+            base,
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+        );
+        assert_eq!(rank, 2);
+    }
+
+    #[test]
+    fn test_extract_dp_rank_ipv6_rank_zero() {
+        let result =
+            extract_dp_rank("https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@0");
+        assert!(result.is_ok());
+        let (base, rank) = result.unwrap();
+        assert_eq!(
+            base,
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+        );
+        assert_eq!(rank, 0);
+    }
+
+    #[test]
+    fn test_parse_worker_url_ipv6_dp() {
+        let (base, rank) =
+            parse_worker_url("https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@3");
+        assert_eq!(
+            base,
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+        );
+        assert_eq!(rank, Some(3));
+    }
+
+    #[test]
+    fn test_parse_worker_url_ipv6_no_dp() {
+        let (base, rank) =
+            parse_worker_url("https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009");
+        assert_eq!(
+            base,
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+        );
+        assert_eq!(rank, None);
+    }
+
+    #[tokio::test]
+    async fn test_get_dp_aware_workers_ipv6() {
+        let urls = vec![
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009".to_string(),
+        ];
+        let result = get_dp_aware_workers(&urls, &None, 4).await.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(
+            result[0],
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@0"
+        );
+        assert_eq!(
+            result[1],
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@1"
+        );
+        assert_eq!(
+            result[2],
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@2"
+        );
+        assert_eq!(
+            result[3],
+            "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009@3"
+        );
+
+        // Verify round-trip: extracting dp_rank from expanded URLs works
+        for (i, url) in result.iter().enumerate() {
+            let (base, rank) = extract_dp_rank(url).unwrap();
+            assert_eq!(
+                base,
+                "https://[2a03:83e4:5006:0090:5f5a:f8c5:0400:0000]:20009"
+            );
+            assert_eq!(rank, i);
+        }
+    }
 }

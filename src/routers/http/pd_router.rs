@@ -1,5 +1,6 @@
 // PD (Prefill-Decode) Router Implementation
 // This module handles routing for disaggregated prefill-decode systems
+use super::dp_utils;
 use super::logprobs_merge;
 use super::pd_types::{api_path, PDRouterError};
 use crate::config::types::RetryConfig;
@@ -2304,12 +2305,15 @@ impl RouterTrait for PDRouter {
         };
 
         let decode_worker = &decode_workers[decode_idx];
-        let url = format!("{}{}", decode_worker.url(), path);
+        let url = decode_worker.endpoint_url(path);
 
         debug!("PDRouter transparent proxy: forwarding to {}", url);
 
         // Build the request
         let mut request_builder = self.client.post(&url);
+
+        // Add X-data-parallel-rank header for DP-aware routing
+        request_builder = dp_utils::add_dp_rank_header(request_builder, decode_worker.dp_rank());
 
         // Propagate headers
         request_builder = header_utils::propagate_trace_headers(request_builder, headers);
