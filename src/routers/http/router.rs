@@ -1885,8 +1885,7 @@ mod tests {
             w.set_healthy(false);
         }
 
-        let result =
-            router.select_worker_for_model(None, Some(r#"{"prompt": "test"}"#), None);
+        let result = router.select_worker_for_model(None, Some(r#"{"prompt": "test"}"#), None);
         assert!(
             result.is_none(),
             "Should return None when all workers are unavailable"
@@ -1902,14 +1901,13 @@ mod tests {
         for i in 0..50 {
             let mut header_map = HeaderMap::new();
             let session_id = format!("session-{}", i);
-            header_map.insert(
-                "x-session-id",
-                HeaderValue::from_str(&session_id).unwrap(),
-            );
+            header_map.insert("x-session-id", HeaderValue::from_str(&session_id).unwrap());
 
-            if let Some(worker) =
-                router.select_worker_for_model(None, Some(r#"{"prompt": "test"}"#), Some(&header_map))
-            {
+            if let Some(worker) = router.select_worker_for_model(
+                None,
+                Some(r#"{"prompt": "test"}"#),
+                Some(&header_map),
+            ) {
                 worker_urls_seen.insert(worker.url().to_string());
             }
         }
@@ -1946,7 +1944,9 @@ mod tests {
             })
             .collect();
 
-        assert_eq!(method1, method2, "Both header conversion methods should produce identical results");
+        assert_eq!(
+            method1, method2,
+            "Both header conversion methods should produce identical results"
+        );
     }
-
 }

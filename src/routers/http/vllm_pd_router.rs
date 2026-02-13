@@ -1196,7 +1196,10 @@ impl RouterTrait for VllmPDRouter {
             let request_headers: Option<HashMap<String, String>> = headers.map(|h| {
                 h.iter()
                     .filter_map(|(name, value)| {
-                        value.to_str().ok().map(|v| (name.as_str().to_lowercase(), v.to_string()))
+                        value
+                            .to_str()
+                            .ok()
+                            .map(|v| (name.as_str().to_lowercase(), v.to_string()))
                     })
                     .collect()
             });
@@ -1361,7 +1364,10 @@ impl RouterTrait for VllmPDRouter {
             let request_headers: Option<HashMap<String, String>> = headers.map(|h| {
                 h.iter()
                     .filter_map(|(name, value)| {
-                        value.to_str().ok().map(|v| (name.as_str().to_lowercase(), v.to_string()))
+                        value
+                            .to_str()
+                            .ok()
+                            .map(|v| (name.as_str().to_lowercase(), v.to_string()))
                     })
                     .collect()
             });
@@ -1528,10 +1534,16 @@ impl RouterTrait for VllmPDRouter {
             // Direct URL mode - use worker registry, filtered by availability
             let all_prefill = self.pd_router.worker_registry.get_prefill_workers();
             let prefill_workers: Vec<Arc<dyn Worker>> = all_prefill
-                .iter().filter(|w| w.is_available()).cloned().collect();
+                .iter()
+                .filter(|w| w.is_available())
+                .cloned()
+                .collect();
             let all_decode = self.pd_router.worker_registry.get_decode_workers();
             let decode_workers: Vec<Arc<dyn Worker>> = all_decode
-                .iter().filter(|w| w.is_available()).cloned().collect();
+                .iter()
+                .filter(|w| w.is_available())
+                .cloned()
+                .collect();
 
             if prefill_workers.is_empty() || decode_workers.is_empty() {
                 return (
@@ -1551,7 +1563,10 @@ impl RouterTrait for VllmPDRouter {
             let request_headers: Option<HashMap<String, String>> = headers.map(|h| {
                 h.iter()
                     .filter_map(|(name, value)| {
-                        value.to_str().ok().map(|v| (name.as_str().to_lowercase(), v.to_string()))
+                        value
+                            .to_str()
+                            .ok()
+                            .map(|v| (name.as_str().to_lowercase(), v.to_string()))
                     })
                     .collect()
             });

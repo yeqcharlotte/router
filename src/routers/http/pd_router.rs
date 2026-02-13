@@ -2301,7 +2301,10 @@ impl RouterTrait for PDRouter {
         let request_headers: Option<HashMap<String, String>> = headers.map(|h| {
             h.iter()
                 .filter_map(|(name, value)| {
-                    value.to_str().ok().map(|v| (name.as_str().to_lowercase(), v.to_string()))
+                    value
+                        .to_str()
+                        .ok()
+                        .map(|v| (name.as_str().to_lowercase(), v.to_string()))
                 })
                 .collect()
         });
